@@ -1,0 +1,343 @@
+---
+title: "Abs FAA and BAA exploration"
+author: "Marianne Emery"
+date: "8/3/2020"
+output: html_document
+---
+
+
+```{r}
+library(ggplot2)
+library(reshape2)
+#install.packages("psych", repos = "https://personality-project.org/r/", type="source")
+library(psych)
+library(lme4)
+#install.packages("ape")
+library(ape)
+library(nlme)
+#install.packages("pastecs")
+library(pastecs)
+library(RColorBrewer)
+#install.packages("pheatmap")
+library(pheatmap)
+library(gplots)
+library(data.table)
+
+
+
+```
+
+
+
+
+#------Anlaysis of Abs BAA traits-------
+
+BAA data
+```{r}
+
+baa_dat <- read.csv("~/Desktop/Ath_1001/Ath_1001_metabolic/data/BAA/03_22_2020_Arabidopsis_1001_BAA.csv", header=TRUE)
+
+```
+
+BAA Summary
+```{r}
+##Diagnostic
+#summary(baa_dat)
+stat_out = stat.desc(baa_dat)
+
+#write.table(stat_out, file="~/Desktop/Ath_1001/Ath_1001_metabolic/results/BAA/Ath_1001_BAA_abs_descriptive_stats.csv", sep=",", row.names=T)
+
+
+```
+
+
+BAA distribution
+```{r}
+#Box plot
+# Open a pdf file
+pdf("~/Desktop/Ath_1001/Ath_1001_metabolic/results/BAA/Ath_1001_BAA_abs_boxplots.pdf")
+
+a <- boxplot(baa_dat[,3:length(baa_dat)],col="yellow")
+
+# Close the pdf file
+dev.off()
+
+
+
+#Histogram
+# Open a pdf file
+pdf("~/Desktop/Ath_1001/Ath_1001_metabolic/results/BAA/Ath_1001_BAA_abs_histogram.pdf")
+
+ggplot(melt(baa_dat[, 3:length(baa_dat)]),aes(x=value)) + geom_histogram(binwidth = 10) + facet_wrap(~variable)
+
+# Close the pdf file
+dev.off()
+
+
+
+#qqnorm(baa_dat$Ala)
+
+```
+
+
+BAA correlation
+```{r}
+#correlation of AA traits
+#mylist <- list()
+
+aa <- baa_dat[, 3:length(baa_dat)]
+
+
+b1=corr.test(aa,method="spearman",adjust="fdr")
+r_matrix=b1$r
+r_matrix[row(r_matrix)>col(r_matrix)]=0
+diag(r_matrix)=0
+
+p_matrix=b1$p
+p_matrix[row(p_matrix)>col(p_matrix)]=1
+diag(p_matrix)=1
+
+#create table
+r_table=melt(r_matrix)
+p_table=melt(p_matrix)
+
+#write.csv(r_table,"~/Desktop/Ath_1001/Ath_1001_metabolic/results/BAA/Ath_1001_BAA_abs_corr_rtable.csv")
+#write.csv(p_table,"~/Desktop/Ath_1001/Ath_1001_metabolic/results/BAA/Ath_1001_BAA_abs_corr_ptable.csv")
+
+```
+
+
+Heatmap
+```{r}
+#create matrix of distances
+geneExp_matrix_col <- as.matrix(baa_dat[3:18])
+head(geneExp_matrix_col)
+
+par(mar = rep(2, 6))
+# Open a pdf file
+pdf("~/Desktop/Ath_1001/Ath_1001_metabolic/results/BAA/Ath_1001_BAA_abs_heatmap.pdf")
+
+heatmap.2(geneExp_matrix_col, trace = "none", main="BAA Abs", scale="row", cexRow=0.1, cexCol=0.5)
+
+# Close the pdf file
+dev.off()
+
+```
+
+
+BAA heritability
+```{r}
+## Calculate heritability
+
+baa_dat$Line <- as.character(baa_dat$Line)
+baa_dat$population = as.character(baa_dat$population)
+
+#save Line column
+line_num = baa_dat[1]
+
+herit_out <- apply(baa_dat[,3:18], 2, FUN = function(x){
+  #Calculate Harmonic Mean
+  # temp table with Line and trait
+  temp_table = cbind(line_num, x)
+
+  # remove Lines that have missing phenotypic trait values
+  data_na_omit = temp_table[complete.cases(temp_table), ]
+
+  # count reps for each line
+  line_count = as.data.frame(table(data_na_omit$Line))
+  # calculate harmonic mean
+  harmonic_mean = (psych::harmonic.mean(line_count$Freq))
+  #model
+  lme <- lmer(x ~ (1|Line) +  (1|population), data = baa_dat, REML=TRUE)
+  #summary statistics
+  t <- summary(lme)
+  summ <- as.data.frame(summary(lme)$varcor)
+  #save residual variance
+  resid_var = summ$vcov[3]
+  #save line variance
+  line_var = summ$vcov[1]
+
+#Calculate heritability
+herit = line_var / (line_var + (resid_var/harmonic_mean))
+print (paste("Heritability: ", herit))
+
+})
+
+
+
+#put output into table
+Heritability <- unlist(herit_out)
+xx <- gsub("Heritability:  ", "", Heritability)
+
+xx <- as.data.frame(xx)
+
+#convert rownames to column
+xx <- setDT(xx, keep.rownames = TRUE)[]
+colnames(xx) <- c("BAA_Trait", "Heritability")
+
+
+#write.csv(xx,"~/Desktop/Ath_1001/Ath_1001_metabolic/results/BAA/Ath_1001_BAA_abs_heritability.csv", row.names = FALSE)
+
+```
+
+
+
+
+
+
+
+
+
+#------Anlaysis of Abs FAA traits-------
+
+FAA data
+```{r}
+
+faa_dat <- read.csv("~/Desktop/Ath_1001/Ath_1001_metabolic/data/FAA/03_22_2020_Arabidopsis_1001_FAA.csv", header=TRUE)
+
+```
+
+FAA Summary
+```{r}
+##Diagnostic
+#summary(baa_dat)
+stat_out_faa = stat.desc(faa_dat)
+
+write.table(stat_out_faa, file="~/Desktop/Ath_1001/Ath_1001_metabolic/results/FAA/Ath_1001_FAA_abs_descriptive_stats.csv", sep=",", row.names=T)
+
+
+```
+
+
+FAA distribution
+```{r}
+#Box plot
+# Open a pdf file
+pdf("~/Desktop/Ath_1001/Ath_1001_metabolic/results/FAA/Ath_1001_FAA_abs_boxplots.pdf")
+
+faa <- boxplot(faa_dat[,3:length(faa_dat)],col="yellow")
+
+# Close the pdf file
+dev.off()
+
+
+#Histogram
+# Open a pdf file
+pdf("~/Desktop/Ath_1001/Ath_1001_metabolic/results/FAA/Ath_1001_FAA_abs_histogram.pdf")
+
+ggplot(melt(faa_dat[, 3:length(faa_dat)]),aes(x=value)) + geom_histogram(binwidth = .5) + facet_wrap(~variable)
+
+# Close the pdf file
+dev.off()
+
+
+
+#qqnorm(faa_dat$Ala)
+
+
+```
+
+FAA correlation
+```{r}
+#correlation of AA traits
+
+faa <- faa_dat[, 3:length(faa_dat)]
+
+
+b1=corr.test(faa,method="spearman",adjust="fdr")
+r_matrix=b1$r
+r_matrix[row(r_matrix)>col(r_matrix)]=0
+diag(r_matrix)=0
+
+p_matrix=b1$p
+p_matrix[row(p_matrix)>col(p_matrix)]=1
+diag(p_matrix)=1
+
+#create table
+r_table=melt(r_matrix)
+p_table=melt(p_matrix)
+
+#write.csv(r_table,"~/Desktop/Ath_1001/Ath_1001_metabolic/results/FAA/Ath_1001_FAA_abs_corr_rtable.csv")
+#write.csv(p_table,"~/Desktop/Ath_1001/Ath_1001_metabolic/results/FAA/Ath_1001_FAA_abs_corr_ptable.csv")
+
+```
+
+
+FAA Heatmap
+```{r}
+#create matrix of distances
+geneExp_matrix_col <- as.matrix(faa_dat[3:22])
+head(geneExp_matrix_col)
+
+
+# Open a pdf file
+pdf("~/Desktop/Ath_1001/Ath_1001_metabolic/results/FAA/Ath_1001_FAA_abs_heatmap.pdf")
+
+heatmap.2(geneExp_matrix_col, trace = "none", main="FAA Abs", scale="row", cexRow=0.1, cexCol=0.5)
+
+# Close the pdf file
+dev.off()
+
+```
+
+
+FAA heritability
+```{r}
+## Calculate heritability
+
+faa_dat$Line <- as.character(faa_dat$Line)
+faa_dat$population = as.character(faa_dat$population)
+
+#save Line column
+line_num = faa_dat[1]
+
+herit_out <- apply(faa_dat[,3:22], 2, FUN = function(x){
+  #Calculate Harmonic Mean
+  # temp table with Line and trait
+  temp_table = cbind(line_num, x)
+
+  # remove Lines that have missing phenotypic trait values
+  data_na_omit = temp_table[complete.cases(temp_table), ]
+
+  # count reps for each line
+  line_count = as.data.frame(table(data_na_omit$Line))
+  # calculate harmonic mean
+  harmonic_mean = (psych::harmonic.mean(line_count$Freq))
+  #model
+  lme <- lmer(x ~ (1|Line) +  (1|population), data = faa_dat, REML=TRUE)
+  #summary statistics
+  t <- summary(lme)
+  summ <- as.data.frame(summary(lme)$varcor)
+  #save residual variance
+  resid_var = summ$vcov[3]
+  #save line variance
+  line_var = summ$vcov[1]
+
+#Calculate heritability
+herit = line_var / (line_var + (resid_var/harmonic_mean))
+print (paste("Heritability: ", herit))
+
+})
+
+
+
+#put output into table
+Heritability <- unlist(herit_out)
+xx <- gsub("Heritability:  ", "", Heritability)
+
+xx <- as.data.frame(xx)
+
+#convert rownames to column
+xx <- setDT(xx, keep.rownames = TRUE)[]
+colnames(xx) <- c("FAA_Trait", "Heritability")
+
+
+#write.csv(xx,"~/Desktop/Ath_1001/Ath_1001_metabolic/results/FAA/Ath_1001_FAA_abs_heritability.csv", row.names = FALSE)
+
+```
+
+
+
+
+
+
